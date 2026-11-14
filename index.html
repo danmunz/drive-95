@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f8f3e7" />
+    <meta name="description" content="A simple northbound I-95 stop guide from Jacksonville to Alexandria." />
+    <title>I-95 Stop Guide</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill='%231d4650' d='M14 3h36l-4 58H18z'/%3E%3Cpath fill='%23f8f3e7' d='M29 10h6v12h-6zm0 21h6v12h-6zm0 21h6v9h-6z'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+    <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <style>
+      :root {
+        --ink: #183740;
+        --muted: #5d6d6f;
+        --paper: #f8f3e7;
+        --paper-deep: #eee6d5;
+        --line: #d9d1c0;
+        --road: #cb5d38;
+        --road-dark: #a64327;
+        --green: #2e6658;
+        --yellow: #f2c765;
+        --white: #fffdf7;
+        --radius: 15px;
+        --shadow: 0 2px 0 rgba(24, 55, 64, 0.11);
+      }
+
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        min-width: 320px;
+        color: var(--ink);
+        background: var(--paper);
+        font-family: "Aptos", "Avenir Next", "Trebuchet MS", sans-serif;
+        font-size: 16px;
+        line-height: 1.42;
+      }
+      button, a { -webkit-tap-highlight-color: transparent; }
+      button { font: inherit; }
+      .shell { width: min(100%, 700px); margin: 0 auto; padding: 0 16px 92px; }
+      .masthead { padding: 22px 0 16px; border-bottom: 4px solid var(--ink); }
+      .route-mark { display: flex; align-items: center; gap: 11px; }
+      .shield {
+        display: grid; place-items: center; width: 48px; height: 48px;
+        background: var(--ink); color: var(--paper); border-radius: 9px 9px 16px 16px;
+        font-family: Georgia, serif; font-size: 19px; font-weight: 800; letter-spacing: -1px;
+        border: 2px solid var(--paper); outline: 2px solid var(--ink);
+      }
+      h1, h2, h3, p { margin-top: 0; }
+      h1 { margin-bottom: 1px; font-family: Georgia, "Iowan Old Style", serif; font-size: clamp(1.65rem, 6vw, 2.2rem); letter-spacing: -0.035em; line-height: 1; }
+      .subhead { margin: 0; font-size: .91rem; color: var(--muted); }
+      .notice { margin: 17px 0; padding: 11px 13px; background: #fff0c8; border-left: 4px solid var(--road); border-radius: 0 8px 8px 0; color: #5c3a1d; font-size: .9rem; }
+      .location-panel { margin: 20px 0 14px; padding: 16px; border: 1px solid var(--line); background: var(--white); border-radius: var(--radius); box-shadow: var(--shadow); }
+      .location-row { display: flex; justify-content: space-between; gap: 14px; align-items: center; }
+      .eyebrow { margin-bottom: 3px; color: var(--muted); font-size: .71rem; font-weight: 800; text-transform: uppercase; letter-spacing: .09em; }
+      .location-title { margin: 0; font-family: Georgia, serif; font-size: 1.16rem; line-height: 1.1; }
+      .locate {
+        flex: 0 0 auto; min-height: 44px; padding: 0 13px; border: 0; border-radius: 8px;
+        color: var(--white); background: var(--ink); font-weight: 800; cursor: pointer;
+      }
+      .locate:focus-visible, .filter:focus-visible, .map-link:focus-visible { outline: 3px solid var(--yellow); outline-offset: 2px; }
+      .locate[disabled] { opacity: .7; cursor: wait; }
+      .location-detail { margin: 10px 0 0; color: var(--muted); font-size: .87rem; }
+      .filters { position: sticky; z-index: 2; top: 0; margin: 0 -16px; padding: 10px 16px 12px; background: color-mix(in srgb, var(--paper) 94%, transparent); border-bottom: 1px solid var(--line); backdrop-filter: blur(8px); }
+      .filter-scroll { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 1px; scrollbar-width: none; }
+      .filter-scroll::-webkit-scrollbar { display: none; }
+      .filter { flex: 0 0 auto; min-height: 39px; padding: 0 13px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink); background: var(--white); font-weight: 750; cursor: pointer; }
+      .filter[aria-pressed="true"] { border-color: var(--ink); color: var(--white); background: var(--ink); }
+      main { padding-top: 22px; }
+      .map-section { margin-bottom: 23px; }
+      .map-section summary { cursor: pointer; font-family: Georgia, serif; font-size: 1.3rem; font-weight: bold; }
+      .map-help { margin: 7px 0 10px; color: var(--muted); font-size: .85rem; }
+      #map { height: 310px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper-deep); z-index: 0; }
+      .map-fallback { padding: 20px; color: var(--muted); }
+      .leaflet-popup-content { font: 15px/1.4 "Avenir Next", sans-serif; }
+      .leaflet-popup-content a { display: inline-block; padding: 8px 0; font-weight: bold; }
+      .section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 11px; }
+      h2 { margin: 0; font-family: Georgia, serif; font-size: 1.38rem; letter-spacing: -.02em; }
+      .count { color: var(--muted); font-size: .84rem; font-weight: 700; white-space: nowrap; }
+      #stops { display: grid; gap: 12px; }
+      .stop { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: var(--white); box-shadow: var(--shadow); }
+      .stop::before { position: absolute; inset: 0 auto 0 0; width: 6px; content: ""; background: var(--road); }
+      .stop.recommended::before { background: var(--green); }
+      .stop-inner { padding: 16px 15px 15px 20px; }
+      .stop-topline { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 7px; }
+      .region { color: var(--muted); font-size: .78rem; font-weight: 800; letter-spacing: .025em; }
+      .ahead { padding: 3px 8px; border-radius: 999px; color: #17493c; background: #dceee6; font-size: .73rem; font-weight: 800; white-space: nowrap; }
+      h3 { margin-bottom: 4px; font-family: Georgia, serif; font-size: 1.22rem; line-height: 1.1; letter-spacing: -.018em; }
+      .meta { margin-bottom: 8px; color: var(--road-dark); font-size: .87rem; font-weight: 800; }
+      .summary { margin-bottom: 12px; color: #3f5356; font-size: .93rem; }
+      .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+      .tag { padding: 3px 7px; border-radius: 5px; color: var(--ink); background: var(--paper-deep); font-size: .74rem; font-weight: 750; }
+      .tag.primary { color: #164638; background: #ddede2; }
+      .actions { display: flex; gap: 8px; }
+      .map-link { display: inline-flex; min-height: 43px; align-items: center; justify-content: center; padding: 0 13px; border-radius: 7px; text-decoration: none; font-size: .9rem; font-weight: 800; }
+      .map-link.primary { color: var(--white); background: var(--ink); }
+      .map-link.secondary { border: 1px solid var(--line); color: var(--ink); background: transparent; }
+      .empty { padding: 22px 12px; border: 1px dashed var(--line); border-radius: var(--radius); color: var(--muted); text-align: center; }
+      .tip { margin-top: 26px; padding: 17px; border-top: 3px solid var(--ink); background: var(--paper-deep); }
+      .tip h2 { font-size: 1.15rem; }
+      .tip ul { margin: 9px 0 0; padding-left: 19px; color: #3f5356; font-size: .9rem; }
+      .tip li + li { margin-top: 6px; }
+      footer { padding: 22px 0 8px; color: var(--muted); font-size: .76rem; }
+      .bottom-locate { position: fixed; z-index: 4; left: max(16px, calc(50% - 334px)); right: max(16px, calc(50% - 334px)); bottom: 16px; display: none; min-height: 52px; border: 0; border-radius: 11px; color: var(--white); background: var(--road); box-shadow: 0 5px 18px rgba(82, 39, 23, .25); font-weight: 850; }
+      @media (max-width: 430px) { .bottom-locate { display: block; } }
+      @media (min-width: 700px) { .shell { padding-left: 26px; padding-right: 26px; } .filters { margin-left: -26px; margin-right: -26px; padding-left: 26px; padding-right: 26px; } }
+      @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="masthead">
+        <div class="route-mark">
+          <div class="shield" aria-hidden="true">95</div>
+          <div>
+            <h1>Northbound stop guide</h1>
+            <p class="subhead">Jacksonville, FL → Alexandria, VA · Sunday, November 15</p>
+          </div>
+        </div>
+      </header>
+
+      <p class="notice"><strong>Passenger use only.</strong> Choose the next stop before leaving the highway or while parked. Check Maps for live routing and hours.</p>
+
+      <section class="location-panel" aria-labelledby="location-heading">
+        <div class="location-row">
+          <div>
+            <div class="eyebrow">Your position</div>
+            <h2 class="location-title" id="location-heading">Start from Jacksonville</h2>
+          </div>
+          <button class="locate" type="button" id="locate">Use my location</button>
+        </div>
+        <p class="location-detail" id="location-detail">Tap once to put the closest useful stops at the top. Your coordinates stay in this browser; opening the map requests map imagery for the displayed area.</p>
+      </section>
+
+      <nav class="filters" aria-label="Filter stops by need">
+        <div class="filter-scroll">
+          <button class="filter" type="button" data-filter="all" aria-pressed="true">All stops</button>
+          <button class="filter" type="button" data-filter="fuel" aria-pressed="false">Fuel + restroom</button>
+          <button class="filter" type="button" data-filter="coffee" aria-pressed="false">Coffee</button>
+          <button class="filter" type="button" data-filter="food" aria-pressed="false">Food</button>
+          <button class="filter" type="button" data-filter="stretch" aria-pressed="false">Stretch</button>
+          <button class="filter" type="button" data-filter="shopping" aria-pressed="false">Shopping</button>
+        </div>
+      </nav>
+
+      <main>
+        <details class="map-section" id="map-section">
+          <summary>See stops on a map</summary>
+          <p class="map-help">Tap a marker for details. Markers show approximate stop areas; use Directions for the exact destination. The map follows your selected filter.</p>
+          <div id="map" aria-label="Map of stop areas"><p class="map-fallback">Loading map… If it doesn’t appear, use the stop list below.</p></div>
+        </details>
+        <div class="section-heading">
+          <h2 id="stops-heading">Stops ahead</h2>
+          <span class="count" id="count" aria-live="polite"></span>
+        </div>
+        <section id="stops" aria-labelledby="stops-heading"></section>
+
+        <aside class="tip">
+          <h2>Quick road rules</h2>
+          <ul>
+            <li>Enter the specific destination in Maps before exiting I-95—don’t hunt around after leaving the interstate.</li>
+            <li>Favor staffed, bright, busy stores and commercial clusters. Keep valuables out of sight.</li>
+            <li>Fuel before a quarter tank, and use parks only in daylight.</li>
+          </ul>
+        </aside>
+      </main>
+
+      <footer>
+        Curated options, not live business data. Stop details and hours can change; Maps is the final check before an exit.
+      </footer>
+    </div>
+    <button class="bottom-locate" type="button" id="bottom-locate">⌖ Find stops near me</button>
+
+    <script>
+      const stops = [
+        { mile: 88, city: "Pooler, GA", name: "Pooler retail break", exit: "Exit 104", address: "200 Tanger Outlets Blvd, Pooler, GA 31322", lat: 32.116, lng: -81.246, tags: ["coffee", "food", "shopping", "stretch"], primary: "Coffee, food & a real walk", note: "Busy suburban shopping cluster with Starbucks, big-box stores, fast food, and Tanger Outlets. Best if they want more than a quick pump stop.", duration: "Allow 25–45 min" },
+        { mile: 123, city: "Hardeeville, SC", name: "South Carolina Welcome Center", exit: "Mile 4 northbound", address: "South Carolina Welcome Center I-95 North, Hardeeville, SC", lat: 32.254, lng: -81.098, tags: ["stretch"], primary: "No-detour restroom break", note: "Official welcome center with restrooms, parking, picnic space, and visitor information. No fuel or prepared food.", duration: "10–15 min" },
+        { mile: 124, city: "Hardeeville, SC", name: "QuikTrip", exit: "Exit 5", address: "15966 Whyte Hardee Blvd, Hardeeville, SC 29927", lat: 32.286, lng: -81.080, tags: ["fuel", "coffee", "food"], primary: "Reliable early reset", note: "Large 24-hour convenience stop with fuel, coffee, QT Kitchens food, and restrooms immediately off I-95.", duration: "15–20 min" },
+        { mile: 278, city: "Florence, SC", name: "Target + food cluster", exit: "Exit 160A", address: "2791 David H McLeod Blvd, Florence, SC 29501", lat: 34.193, lng: -79.829, tags: ["coffee", "food", "shopping", "stretch"], primary: "Coffee and choices", note: "Target with in-store Starbucks plus Chipotle, Panda Express, Jersey Mike’s, and other familiar options close together.", duration: "20–35 min" },
+        { mile: 288, city: "Florence, SC", name: "Buc-ee’s", exit: "Exit 170", address: "3390 N Williston Rd, Florence, SC 29506", lat: 34.256, lng: -79.767, tags: ["fuel", "coffee", "food", "shopping", "stretch"], primary: "Best all-purpose stop", note: "Big, bright 24-hour travel center: fuel, famously extensive restrooms, hot food, coffee, snacks, and plenty to browse. It can be busy on Sunday.", duration: "25–40 min" },
+        { mile: 348, city: "Rowland, NC", name: "North Carolina Welcome Center", exit: "Mile 5 northbound", address: "I-95 N, Rowland, NC 28383", lat: 34.636, lng: -79.304, tags: ["stretch"], primary: "No-detour backup", note: "Staffed visitor facility in daytime, with 24-hour restrooms and drinking water. Useful only if the bathroom is the priority.", duration: "10–15 min" },
+        { mile: 366, city: "Lumberton, NC", name: "Wawa", exit: "Exit 22", address: "150 Jackson Ct, Lumberton, NC 28358", lat: 34.653, lng: -79.016, tags: ["fuel", "coffee", "food"], primary: "Fast fuel + food option", note: "Newer 24-hour Wawa directly off the interstate with fuel, made-to-order food, coffee, and restrooms. Starbucks and Firehouse Subs are nearby.", duration: "15–25 min" },
+        { mile: 398, city: "Fayetteville, NC", name: "Starbucks Cedar Creek", exit: "Exit 49", address: "1855 Cedar Creek Rd, Fayetteville, NC 28312", lat: 35.01, lng: -78.82, tags: ["coffee", "food"], primary: "Predictable coffee stop", note: "Drive-through Starbucks with indoor seating about 0.6 miles off I-95—simple for coffee, a restroom, and a short reset.", duration: "15–20 min" },
+        { mile: 444, city: "Benson, NC", name: "Sheetz", exit: "Near Exit 79", address: "13433 NC-210, Benson, NC 27504", lat: 35.381, lng: -78.550, tags: ["fuel", "coffee", "food"], primary: "Easy 24-hour fallback", note: "Large-format Sheetz for fuel, made-to-order food, coffee, and restrooms, about a mile off the interstate.", duration: "15–20 min" },
+        { mile: 465, city: "Smithfield / Selma, NC", name: "Sheetz + Carolina Premium Outlets", exit: "Exit 95", address: "300 S Endurance Way, Selma, NC 27576", lat: 35.534, lng: -78.330, tags: ["fuel", "coffee", "food", "shopping", "stretch"], primary: "Best mid-trip longer break", note: "Choose the newer-feeling Sheetz for efficiency, or pair it with nearby outlets and Starbucks for a real walking/shopping break.", duration: "20–40 min" },
+        { mile: 515, city: "Rocky Mount, NC", name: "Target + Sheetz options", exit: "Exit 138A", address: "731 Sutters Creek Blvd, Rocky Mount, NC 27804", lat: 35.987, lng: -77.803, tags: ["fuel", "coffee", "food", "shopping", "stretch"], primary: "Shop or make it quick", note: "Target has an in-store Starbucks and plenty of indoor browsing; nearby Sheetz is the quicker 24-hour fuel and restroom alternative.", duration: "15–40 min" },
+        { mile: 564, city: "Roanoke Rapids, NC", name: "Sheetz + Starbucks", exit: "Exit 173 area", address: "1500 Julian R Allsbrook Hwy, Roanoke Rapids, NC 27870", lat: 36.449, lng: -77.654, tags: ["fuel", "coffee", "food"], primary: "Final North Carolina reset", note: "Easy large-format Sheetz for fuel and food; a Starbucks in the Premier Landing shopping area is a useful alternative.", duration: "15–20 min" },
+        { mile: 620, city: "Carson, VA", name: "Carson Safety Rest Area", exit: "Mile 37 northbound", address: "I-95 N, Carson, VA 23830", lat: 36.998, lng: -77.398, tags: ["stretch"], primary: "Spacious official rest area", note: "One of the stronger official facilities: many car spaces, vending, picnic tables, grills, and a pet area. No gas or restaurant.", duration: "10–15 min" },
+        { mile: 671, city: "Ashland, VA", name: "Wawa / Starbucks / Sheetz", exit: "Exit 86–89", address: "10373 Sliding Hill Rd, Ashland, VA 23005", lat: 37.744, lng: -77.481, tags: ["fuel", "coffee", "food"], primary: "Final major refresh", note: "A developed exit with 24-hour Wawa and Sheetz options plus a newer Starbucks nearby—good before Fredericksburg and Northern Virginia traffic.", duration: "15–25 min" },
+        { mile: 704, city: "Fredericksburg, VA", name: "Central Park / Target", exit: "Exit 130B", address: "1180 Carl D Silver Pkwy, Fredericksburg, VA 22401", lat: 38.299, lng: -77.516, tags: ["fuel", "coffee", "food", "shopping", "stretch"], primary: "Many choices, more local traffic", note: "Huge commercial cluster with Target, Wawa, indoor mall options, and every sort of familiar food. Useful when a bigger reset is worth the exit traffic.", duration: "20–40 min" },
+        { mile: 713, city: "Stafford, VA", name: "Wawa", exit: "Exit 133", address: "9 S Gateway Dr, Stafford, VA 22554", lat: 38.415, lng: -77.408, tags: ["fuel", "coffee", "food"], primary: "Strong last contingency", note: "Busy 24-hour Wawa for a final fuel, restroom, coffee, or sandwich stop before the last leg north.", duration: "15–20 min" }
+      ];
+
+      let activeFilter = "all";
+      let currentMile = 0;
+      let positioned = false;
+      let map, markers, userMarker, userLocation;
+      const stopList = document.querySelector("#stops");
+      const count = document.querySelector("#count");
+      const locationTitle = document.querySelector("#location-heading");
+      const locationDetail = document.querySelector("#location-detail");
+      const locateButtons = [document.querySelector("#locate"), document.querySelector("#bottom-locate")];
+
+      const icon = { fuel: "Fuel", coffee: "Coffee", food: "Food", stretch: "Stretch", shopping: "Shopping" };
+      const esc = value => String(value).replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]);
+      const mapsUrl = stop => `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(stop.address)}`;
+      function updateMap(filtered, fit = false) {
+        if (!map) return;
+        markers.clearLayers();
+        filtered.forEach(stop => {
+          const marker = L.circleMarker([stop.lat, stop.lng], { radius: 9, color: "#fffdf7", weight: 2, fillColor: "#cb5d38", fillOpacity: 1 });
+          marker.bindPopup(`<strong>${esc(stop.name)}</strong><br>${esc(stop.city)} · ${esc(stop.exit)}<br><a href="#stop-${stop.mile}">See stop details</a>`);
+          marker.addTo(markers);
+        });
+        if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
+        if (userLocation) userMarker = L.circleMarker(userLocation, { radius: 8, color: "#fff", weight: 3, fillColor: "#2565a3", fillOpacity: 1 }).bindPopup("Your approximate location").addTo(map);
+        if (fit && filtered.length) {
+          const points = filtered.slice(0, userLocation ? 4 : filtered.length).map(stop => [stop.lat, stop.lng]);
+          if (userLocation) points.push(userLocation);
+          map.fitBounds(points, { padding: [25, 25], maxZoom: 11 });
+        }
+      }
+      document.querySelector("#map-section").addEventListener("toggle", event => {
+        if (!event.target.open) return;
+        if (!window.L) { document.querySelector(".map-fallback").textContent = "Map unavailable. The stop list below still works."; return; }
+        if (!map) {
+          document.querySelector("#map").innerHTML = "";
+          map = L.map("map", { scrollWheelZoom: false });
+          L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(map);
+          markers = L.layerGroup().addTo(map);
+          render(true);
+        }
+        setTimeout(() => map.invalidateSize(), 0);
+      });
+      function haversine(lat1, lng1, lat2, lng2) {
+        const radians = value => value * Math.PI / 180;
+        const earth = 3958.8;
+        const a = Math.sin(radians(lat2 - lat1) / 2) ** 2 + Math.cos(radians(lat1)) * Math.cos(radians(lat2)) * Math.sin(radians(lng2 - lng1) / 2) ** 2;
+        return earth * 2 * Math.asin(Math.sqrt(a));
+      }
+      function nearestRouteMile(lat, lng) {
+        return stops.reduce((closest, stop) => {
+          const miles = haversine(lat, lng, stop.lat, stop.lng);
+          return miles < closest.distance ? { mile: stop.mile, distance: miles } : closest;
+        }, { mile: 0, distance: Infinity });
+      }
+      function render(fitMap = false) {
+        const filtered = stops
+          .filter(stop => activeFilter === "all" || stop.tags.includes(activeFilter))
+          .filter(stop => !positioned || stop.mile >= currentMile - 12)
+          .sort((a, b) => a.mile - b.mile);
+        count.textContent = `${filtered.length} option${filtered.length === 1 ? "" : "s"}`;
+        updateMap(filtered, fitMap);
+        if (!filtered.length) {
+          stopList.innerHTML = `<div class="empty">No matching stops remain ahead. Try <strong>All stops</strong> to see the full guide.</div>`;
+          return;
+        }
+        stopList.innerHTML = filtered.map((stop, index) => {
+          const ahead = positioned ? Math.max(0, Math.round(stop.mile - currentMile)) : null;
+          const recommended = positioned && index < 3;
+          return `<article id="stop-${stop.mile}" class="stop ${recommended ? "recommended" : ""}">
+            <div class="stop-inner">
+              <div class="stop-topline"><span class="region">${esc(stop.city)} · ${esc(stop.exit)}</span>${ahead !== null ? `<span class="ahead">${ahead === 0 ? "Near you" : `~${ahead} mi ahead`}</span>` : ""}</div>
+              <h3>${esc(stop.name)}</h3>
+              <div class="meta">${esc(stop.primary)} · ${esc(stop.duration)}</div>
+              <p class="summary">${esc(stop.note)}</p>
+              <div class="tags">${stop.tags.map(tag => `<span class="tag ${tag === "fuel" ? "primary" : ""}">${icon[tag]}</span>`).join("")}</div>
+              <div class="actions"><a class="map-link primary" href="${mapsUrl(stop)}" target="_blank" rel="noopener">Directions</a><a class="map-link secondary" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(stop.address)}" target="_blank" rel="noopener">View place</a></div>
+            </div>
+          </article>`;
+        }).join("");
+      }
+      function setLoading(loading) {
+        locateButtons.forEach(button => { button.disabled = loading; button.textContent = loading ? "Finding you…" : button.id === "bottom-locate" ? "⌖ Find stops near me" : "Use my location"; });
+      }
+      function useLocation() {
+        if (!navigator.geolocation) {
+          locationDetail.textContent = "This browser does not provide location. The guide is still listed in northbound order from Jacksonville.";
+          return;
+        }
+        setLoading(true);
+        navigator.geolocation.getCurrentPosition(position => {
+          const closest = nearestRouteMile(position.coords.latitude, position.coords.longitude);
+          currentMile = closest.mile;
+          positioned = true;
+          userLocation = [position.coords.latitude, position.coords.longitude];
+          locationTitle.textContent = closest.distance <= 30 ? "Stops ahead from your location" : "Closest I-95 stop clusters";
+          locationDetail.textContent = closest.distance <= 30
+            ? "Sorted northbound from the route area nearest you. Distances are approximate; Maps has live routing."
+            : "You appear away from the listed I-95 route. Stops are sorted from the closest route area; use Maps for your exact route.";
+          setLoading(false);
+          render(true);
+          document.querySelector("#stops-heading").scrollIntoView({ behavior: "smooth", block: "start" });
+        }, error => {
+          setLoading(false);
+          const messages = { 1: "Location permission was not granted. The guide remains in northbound order from Jacksonville.", 2: "Your location is unavailable right now. The guide remains in northbound order from Jacksonville.", 3: "Location took too long. The guide remains in northbound order from Jacksonville." };
+          locationDetail.textContent = messages[error.code] || "Could not get your location. The guide remains in northbound order from Jacksonville.";
+        }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 });
+      }
+      document.querySelectorAll(".filter").forEach(button => button.addEventListener("click", () => {
+        activeFilter = button.dataset.filter;
+        document.querySelectorAll(".filter").forEach(filter => filter.setAttribute("aria-pressed", String(filter === button)));
+        render(true);
+      }));
+      locateButtons.forEach(button => button.addEventListener("click", useLocation));
+      render();
+    </script>
+  </body>
+</html>
