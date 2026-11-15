@@ -174,6 +174,10 @@
 
     <script>
       const stops = [
+        { mile: 18, city: "Yulee, FL", name: "Wawa", exit: "Exit 373", address: "50 Daydream Ave, Yulee, FL 32097", lat: 30.6233, lng: -81.6402, tags: ["fuel", "coffee", "food"], timing: "About 30–40 min from Jacksonville", primary: "First easy fuel + restroom option", note: "Newer 24-hour Wawa about half a mile from I-95, with fuel, made-to-order food, coffee, restrooms, and a large, busy forecourt.", duration: "15–20 min" },
+        { mile: 32, city: "Kingsland, GA", name: "Starbucks", exit: "Exit 3", address: "1398 Boone Ave, Kingsland, GA 31548", lat: 30.7849, lng: -81.6490, tags: ["coffee", "food"], timing: "About 45–55 min from Jacksonville", primary: "First dedicated Starbucks", note: "Drive-through Starbucks in a busy commercial cluster about 0.7 mile from I-95. Food, fuel, CVS, and a grocery store are close by.", duration: "15–20 min" },
+        { mile: 64, city: "Brunswick, GA", name: "Starbucks — Hwy 341 & I-95", exit: "Exit 36A", address: "5043 New Jesup Hwy, Brunswick, GA 31520", lat: 31.2181, lng: -81.5206, tags: ["coffee", "food"], timing: "About 1 hr–1 hr 15 min from Jacksonville", primary: "Very small detour for coffee", note: "Drive-through Starbucks roughly a quarter mile from I-95, with indoor seating and restrooms. Several fuel and familiar food options share the exit.", duration: "15–20 min" },
+        { mile: 81, city: "Richmond Hill, GA", name: "Starbucks — Pioneer Way", exit: "Exit 82", address: "140 Pioneer Way, Richmond Hill, GA 31324", lat: 31.8675, lng: -81.3379, tags: ["coffee", "food"], timing: "About 1½–1¾ hr from Jacksonville", primary: "Clean newer coffee stop", note: "Newer Starbucks about 0.3 mile from I-95, with parking, restrooms, Wi-Fi, and food. Its latest published Georgia health inspection scored 100/A.", duration: "15–20 min" },
         { mile: 88, city: "Pooler, GA", name: "Pooler retail break", exit: "Exit 104", address: "200 Tanger Outlets Blvd, Pooler, GA 31322", lat: 32.1335, lng: -81.2447, tags: ["coffee", "food", "shopping", "stretch"], primary: "Coffee, food & a real walk", note: "Busy suburban shopping cluster with Starbucks, big-box stores, fast food, and Tanger Outlets. Best if they want more than a quick pump stop.", duration: "Allow 25–45 min" },
         { mile: 123, city: "Hardeeville, SC", name: "South Carolina Welcome Center", exit: "Mile 4 northbound", address: "South Carolina Welcome Center I-95 North, Hardeeville, SC", lat: 32.2669, lng: -81.0860, tags: ["stretch"], primary: "No-detour restroom break", note: "Official welcome center with restrooms, parking, picnic space, and visitor information. No fuel or prepared food.", duration: "10–15 min" },
         { mile: 124, city: "Hardeeville, SC", name: "QuikTrip", exit: "Exit 5", address: "15966 Whyte Hardee Blvd, Hardeeville, SC 29927", lat: 32.2703, lng: -81.0791, tags: ["fuel", "coffee", "food"], primary: "Reliable early reset", note: "Large 24-hour convenience stop with fuel, coffee, QT Kitchens food, and restrooms immediately off I-95.", duration: "15–20 min" },
@@ -248,7 +252,7 @@
       function render(fitMap = false) {
         const filtered = stops
           .filter(stop => activeFilter === "all" || stop.tags.includes(activeFilter))
-          .filter(stop => !positioned || stop.mile >= currentMile - 12)
+          .filter(stop => !positioned || stop.lat >= userLocation[0] - 0.12)
           .sort((a, b) => a.mile - b.mile);
         count.textContent = `${filtered.length} option${filtered.length === 1 ? "" : "s"}`;
         updateMap(filtered, fitMap);
@@ -257,13 +261,13 @@
           return;
         }
         stopList.innerHTML = filtered.map((stop, index) => {
-          const ahead = positioned ? Math.max(0, Math.round(stop.mile - currentMile)) : null;
+          const ahead = positioned ? Math.max(0, Math.round(haversine(userLocation[0], userLocation[1], stop.lat, stop.lng))) : null;
           const recommended = positioned && index < 3;
           return `<article id="stop-${stop.mile}" class="stop ${recommended ? "recommended" : ""}">
             <div class="stop-inner">
-              <div class="stop-topline"><span class="region">${esc(stop.city)} · ${esc(stop.exit)}</span>${ahead !== null ? `<span class="ahead">${ahead === 0 ? "Near you" : `~${ahead} mi ahead`}</span>` : ""}</div>
+              <div class="stop-topline"><span class="region">${esc(stop.city)} · ${esc(stop.exit)}</span>${ahead !== null ? `<span class="ahead">${ahead <= 2 ? "Near you" : `~${ahead} mi away`}</span>` : ""}</div>
               <h3>${esc(stop.name)}</h3>
-              <div class="meta">${esc(stop.primary)} · ${esc(stop.duration)}</div>
+              <div class="meta">${stop.timing ? `${esc(stop.timing)} · ` : ""}${esc(stop.primary)} · ${esc(stop.duration)}</div>
               <p class="summary">${esc(stop.note)}</p>
               <div class="tags">${stop.tags.map(tag => `<span class="tag ${tag === "fuel" ? "primary" : ""}">${icon[tag]}</span>`).join("")}</div>
               <div class="actions"><a class="map-link primary" href="${mapsUrl(stop)}" target="_blank" rel="noopener">Directions</a><a class="map-link secondary" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(stop.address)}" target="_blank" rel="noopener">View place</a></div>
@@ -287,7 +291,7 @@
           userLocation = [position.coords.latitude, position.coords.longitude];
           locationTitle.textContent = closest.distance <= 30 ? "Stops ahead from your location" : "Closest I-95 stop clusters";
           locationDetail.textContent = closest.distance <= 30
-            ? "Sorted northbound from the route area nearest you. Distances are approximate; Maps has live routing."
+            ? "Showing northbound stops from your location. Distance badges are approximate; Directions has live road mileage and traffic."
             : "You appear away from the listed I-95 route. Stops are sorted from the closest route area; use Maps for your exact route.";
           setLoading(false);
           render(true);
